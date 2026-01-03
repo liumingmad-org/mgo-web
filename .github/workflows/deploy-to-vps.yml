@@ -1,0 +1,36 @@
+name: Deploy Image to VPS
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: Docker image tag to deploy
+        required: false
+        default: latest
+
+env:
+  REGISTRY: ${{ secrets.ALIYUN_REGISTRY }}
+  NAMESPACE: ${{ secrets.ALIYUN_NAMESPACE }}
+  IMAGE_NAME: mgo-web
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to VPS
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USERNAME }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            set -e
+            IMAGE_TAG="${{ inputs.image_tag }}"
+            IMAGE="${{ env.REGISTRY }}/${{ env.NAMESPACE }}/${{ env.IMAGE_NAME }}:${IMAGE_TAG}"
+            docker login "${{ env.REGISTRY }}" -u "${{ secrets.ALIYUN_REGISTRY_USERNAME }}" -p "${{ secrets.ALIYUN_REGISTRY_PASSWORD }}"
+            docker pull "${IMAGE}"
+            if docker ps -a --format '{{.Names}}' | grep -q '^mgo-web$'; then
+              docker stop mgo-web
+              docker rm mgo-web
+            fi
+            docker run -d --name mgo-web -p 80:80 "${IMAGE}"
